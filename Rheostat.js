@@ -1,183 +1,226 @@
 import "react-native-gesture-handler";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, View, Text } from "react-native";
 import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
 	withSpring,
 	runOnJS,
+	runOnUI,
 	useDerivedValue,
 	useAnimatedProps,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 
-function App() {
-	// Circle 1 - Top
-	const pressedTop = useSharedValue(false);
-	const offsetTop = useSharedValue(0);
-	const lastOffsetTop = useSharedValue(0);
-	const filledPercentageTop = useSharedValue(0);
+function jslog(...args) {
+	console.log(JSON.stringify(args, null, 4));
+}
 
-	// Circle 2 - Bottom
-	const pressedBottom = useSharedValue(false);
-	const offsetBottom = useSharedValue(0);
-	const lastOffsetBottom = useSharedValue(0);
-	const filledPercentageBottom = useSharedValue(0);
+const normalizeRange = (value, minimum, maximum) => {
+	return (value - minimum) / (maximum - minimum);
+};
 
-	const [offsetTopValue, setOffsetTopValue] = useState(0);
-	const [offsetBottomValue, setOffsetBottomValue] = useState(0);
-	const [snappingPoints, setSnappingPoints] = useState([0, 10, 15, 70, 100]);
+const binarySearch = (arr, target) => {
+	let left = 0;
+	let right = arr.length - 1;
+	let answer = -1;
 
-	const circleSize = 50;
+	while (left <= right) {
+		const mid = Math.floor((left + right) / 2);
 
-	const RheostatHeight = 600;
-	const RheostatWidth = 200;
+		if (arr[mid] === target) {
+			return mid;
+		}
+
+		if (arr[mid] < target) {
+			left = mid + 1;
+		} else {
+			right = mid - 1;
+		}
+	}
+
+	return answer;
+};
+
+const getClosestValue = (arr, target, leftIndex, rightIndex) => {
+	let left = leftIndex || 0;
+	let right = rightIndex || arr.length - 1;
+	let closestIndex = -1;
+
+	while (left <= right) {
+		const mid = Math.floor((left + right) / 2);
+
+		if (arr[mid] === target) {
+			return mid;
+		}
+
+		if (
+			closestIndex === -1 ||
+			Math.abs(arr[mid] - target) < Math.abs(arr[closestIndex] - target)
+		) {
+			closestIndex = mid;
+		}
+
+		if (arr[mid] < target) {
+			left = mid + 1;
+		} else {
+			right = mid - 1;
+		}
+	}
+
+	return closestIndex;
+};
+
+function Rheostat({
+	minRange = 0,
+	maxRange = 1000,
+
+	initialTopValue = 0,
+	initialBottomValue = 100,
+
+	shouldSnap = true,
+	snappingPoints = [0, 100],
+
+	rheostatHeight = 600,
+	rheostatWidth = 200,
+
+	handleSize = 20,
+}) {
+	const rheostatSize = rheostatHeight - handleSize;
+	const valueTopPercentage = initialTopValue / maxRange;
+	const valueBottomPercentage = initialBottomValue / maxRange;
+	const initalValueTop = valueTopPercentage * rheostatSize;
+	const initalValueBottom = rheostatSize - valueBottomPercentage * rheostatSize;
+
+	// // Circle 1 - Top
+	const offsetTop = useSharedValue(initalValueTop);
+	const lastOffsetTop = useSharedValue(initalValueTop);
+
+	// // Circle 2 - Bottom
+	const offsetBottom = useSharedValue(-initalValueBottom);
+	const lastOffsetBottom = useSharedValue(-initalValueBottom);
+
+	const snappingPercentagePoints = snappingPoints.map((point) => {
+		return normalizeRange(point, minRange, maxRange) * 100;
+	});
+
+	const getFilledPercentageTop = () => {
+		const percentHeight = rheostatHeight - handleSize;
+		const filledPercent = (offsetTop.value / percentHeight) * 100;
+
+		if (shouldSnap) {
+			const closestTopIndex = getClosestValue(snappingPercentagePoints, filledPercent);
+			const value = snappingPercentagePoints[closestTopIndex];
+			return value;
+		}
+
+		return filledPercent;
+	};
+
+	const getFilledPercentageBottom = () => {
+		const percentHeight = rheostatHeight - handleSize;
+		const filledPercent = ((-1 * offsetBottom.value) / percentHeight) * 100;
+
+		if (shouldSnap) {
+			const closestBottomIndex = getClosestValue(
+				snappingPercentagePoints,
+				100 - filledPercent
+			);
+			const value = snappingPercentagePoints[closestBottomIndex];
+			return value;
+		}
+
+		return filledPercent;
+	};
+
 	const LineWidth = 4;
 	const hasDoubleHandle = true;
-	const shouldSnap = true;
 
-	useDerivedValue(() => {
-		runOnJS(setOffsetTopValue)(offsetTop.value);
-	}, [offsetTopValue]);
+	// useDerivedValue(() => {
+	// 	runOnJS(setOffsetTopValue)(offsetTop.value);
+	// }, [offsetTopValue]);
 
-	useDerivedValue(() => {
-		runOnJS(setOffsetBottomValue)(offsetBottom.value);
-	}, [offsetBottomValue]);
+	// useDerivedValue(() => {
+	// 	runOnJS(setOffsetBottomValue)(offsetBottom.value);
+	// }, [offsetBottomValue]);
 
 	const getGesturePan = (panType = "bottom") => {
 		const offset = panType === "bottom" ? offsetBottom : offsetTop;
 		const lastOffset = panType === "bottom" ? lastOffsetBottom : lastOffsetTop;
-		const button = panType === "bottom" ? pressedBottom : pressedTop;
 
 		return Gesture.Pan()
 			.onBegin(() => {
-				button.value = true;
+				jslog({
+					initalValueBottom,
+					initalValueTop,
+				});
 			})
 			.onChange((event) => {
 				offset.value = lastOffset.value + event.translationY;
 
+				const filledPercentageTop = getFilledPercentageTop();
+				const filledPercentageBottom = getFilledPercentageBottom();
+
 				if (panType === "bottom") {
-					offset.value = Math.max(-(RheostatHeight - circleSize), offset.value);
+					offset.value = Math.max(-(rheostatHeight - handleSize), offset.value);
 					offset.value = Math.min(0, offset.value);
 				} else {
 					offset.value = Math.max(0, offset.value);
-					offset.value = Math.min(RheostatHeight - circleSize, offset.value);
-				}
-
-				function jslog(...args) {
-					console.log(JSON.stringify(args, null, 4));
+					offset.value = Math.min(rheostatHeight - handleSize, offset.value);
 				}
 
 				if (shouldSnap) {
-					const binarySearch = (arr, target) => {
-						let left = 0;
-						let right = arr.length - 1;
-						let answer = -1;
-
-						while (left <= right) {
-							const mid = Math.floor((left + right) / 2);
-
-							if (arr[mid] === target) {
-								return mid;
-							}
-
-							if (arr[mid] < target) {
-								left = mid + 1;
-							} else {
-								right = mid - 1;
-							}
-						}
-
-						return answer;
-					};
-
-					const getClosestValue = (arr, target, leftIndex, rightIndex) => {
-						let left = leftIndex || 0;
-						let right = rightIndex || arr.length - 1;
-						let closestIndex = -1;
-
-						while (left <= right) {
-							const mid = Math.floor((left + right) / 2);
-
-							if (arr[mid] === target) {
-								return mid;
-							}
-
-							if (
-								closestIndex === -1 ||
-								Math.abs(arr[mid] - target) < Math.abs(arr[closestIndex] - target)
-							) {
-								closestIndex = mid;
-							}
-
-							if (arr[mid] < target) {
-								left = mid + 1;
-							} else {
-								right = mid - 1;
-							}
-						}
-
-						return closestIndex;
-					};
-
-					const getFilledPercentage = (offset, type) => {
-						const percentHeight = RheostatHeight - circleSize;
-						const multiplier = type === "bottom" ? -1 : 1;
-						return multiplier * (offset.value / percentHeight) * 100;
-					};
-
-					const filledPercentageBottom = getFilledPercentage(offsetBottom, "bottom");
-					const filledPercentageTop = getFilledPercentage(offsetTop, "top");
-
 					if (panType === "bottom") {
-						const topIndex = binarySearch(snappingPoints, filledPercentageTop);
-
-						const closestBottomIndex = getClosestValue(
-							snappingPoints,
-							100 - filledPercentageBottom,
-							topIndex + 1,
-							snappingPoints.length - 1
+						const topIndex = binarySearch(
+							snappingPercentagePoints,
+							filledPercentageTop
 						);
 
-						const closestSnappingPercentage = snappingPoints[closestBottomIndex];
-						const rheostatSize = RheostatHeight - circleSize;
+						const closestBottomIndex = getClosestValue(
+							snappingPercentagePoints,
+							filledPercentageBottom,
+							topIndex + 1,
+							snappingPercentagePoints.length - 1
+						);
+						const closestSnappingPercentage =
+							snappingPercentagePoints[closestBottomIndex];
+						const rheostatSize = rheostatHeight - handleSize;
 						const snapValue =
 							rheostatSize - (closestSnappingPercentage / 100) * rheostatSize;
 						offsetBottom.value = -snapValue;
 					} else {
 						const bottomIndex = binarySearch(
-							snappingPoints,
-							100 - filledPercentageBottom
+							snappingPercentagePoints,
+							filledPercentageBottom
 						);
 
 						const closestTopIndex = getClosestValue(
-							snappingPoints,
+							snappingPercentagePoints,
 							filledPercentageTop,
 							0,
-							bottomIndex - 1
+							bottomIndex
 						);
 
-						const closestSnappingPercentage = snappingPoints[closestTopIndex];
-						const snapValue =
-							(closestSnappingPercentage / 100) * (RheostatHeight - circleSize);
+						const closestPercentage = snappingPercentagePoints[closestTopIndex];
+						const snapValue = (closestPercentage / 100) * (rheostatHeight - handleSize);
 						offsetTop.value = snapValue;
 					}
 				}
 			})
 			.onFinalize(() => {
-				button.value = false;
 				lastOffset.value = offset.value;
-			});
+			})
+			.runOnJS(true);
 	};
 
 	const animatedStylesTop = useAnimatedStyle(() => ({
 		transform: [{ translateY: offsetTop.value }],
-		backgroundColor: pressedTop.value ? "#FFE04B" : "#b58df1",
+		backgroundColor: "#b58df1",
 	}));
 
 	const animatedStylesBottom = useAnimatedStyle(() => ({
 		transform: [{ translateY: offsetBottom.value }],
-		backgroundColor: pressedBottom.value ? "#FFA07A" : "#87CEFA",
+		backgroundColor: "#87CEFA",
 	}));
 
 	const filledBar = useAnimatedStyle(() => {
@@ -185,8 +228,8 @@ function App() {
 			width: 10,
 			backgroundColor: "green",
 			position: "absolute",
-			height: RheostatHeight - circleSize - offsetTop.value + offsetBottom.value,
-			left: (RheostatWidth / 2) - LineWidth,
+			height: rheostatHeight - handleSize - offsetTop.value + offsetBottom.value,
+			left: rheostatWidth / 2 - LineWidth,
 			top: offsetTop.value + 25,
 		};
 	});
@@ -205,8 +248,8 @@ function App() {
 		>
 			<View
 				style={{
-					width: RheostatWidth,
-					height: RheostatHeight,
+					width: rheostatWidth,
+					height: rheostatHeight,
 					borderWidth: 1,
 					borderStyle: "solid",
 					borderColor: "black",
@@ -216,14 +259,14 @@ function App() {
 				<View
 					style={{
 						width: LineWidth,
-						height: RheostatHeight - circleSize,
-						backgroundColor: "red",
+						height: rheostatHeight - handleSize,
+						backgroundColor: "#b5b5b5",
 						position: "absolute",
-						left: RheostatWidth / 2 - LineWidth / 2,
-						top: circleSize / 2,
+						left: rheostatWidth / 2 - LineWidth / 2,
+						top: handleSize / 2,
 					}}
 				>
-					{snappingPoints.map((point, index) => (
+					{snappingPercentagePoints.map((point, index) => (
 						<View
 							key={index}
 							style={{
@@ -244,7 +287,7 @@ function App() {
 				<View
 					style={{
 						alignSelf: "center",
-						height: RheostatHeight,
+						height: rheostatHeight,
 					}}
 				>
 					{/* top pan */}
@@ -254,8 +297,8 @@ function App() {
 								style={[
 									{
 										backgroundColor: "#b58df1",
-										width: circleSize,
-										height: circleSize,
+										width: handleSize,
+										height: handleSize,
 										alignItems: "center",
 										justifyContent: "center",
 										opacity: 0.8,
@@ -265,10 +308,11 @@ function App() {
 									animatedStylesTop,
 								]}
 							>
-								<Text>
-									{(offsetTopValue / (RheostatHeight - circleSize)) // TODO:circlesize is not correct
-										.toFixed(2)}
-								</Text>
+								{/* <Text>
+									{transformer(
+										(offsetTopValue / (rheostatHeight - handleSize)) * 100
+									)}
+								</Text> */}
 							</Animated.View>
 						</GestureDetector>
 					)}
@@ -279,21 +323,24 @@ function App() {
 							style={[
 								{
 									backgroundColor: "#87CEFA",
-									width: circleSize,
-									height: circleSize,
+									width: handleSize,
+									height: handleSize,
 									alignItems: "center",
 									justifyContent: "center",
 									opacity: 0.8,
 									borderRadius: 50,
 									top:
-										RheostatHeight -
-										circleSize -
-										(hasDoubleHandle ? circleSize : 0),
+										rheostatHeight -
+										handleSize -
+										(hasDoubleHandle ? handleSize : 0),
 								},
 								animatedStylesBottom,
 							]}
 						>
-							<Text>{offsetBottomValue.toFixed(2)}</Text>
+							{/* <Text>
+								{(-1 * (offsetBottomValue / (rheostatHeight - handleSize)) * 100) // TODO:circlesize is not correct
+									.toFixed(2)}
+							</Text> */}
 						</Animated.View>
 					</GestureDetector>
 				</View>
@@ -302,4 +349,4 @@ function App() {
 	);
 }
 
-export default App;
+export default Rheostat;
