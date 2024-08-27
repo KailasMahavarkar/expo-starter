@@ -1,79 +1,12 @@
 import "react-native-gesture-handler";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, View, Text } from "react-native";
-import Animated, {
-	useAnimatedStyle,
-	useSharedValue,
-	withSpring,
-	runOnJS,
-	runOnUI,
-	useDerivedValue,
-	useAnimatedProps,
-} from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, runOnJS } from "react-native-reanimated";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 
 function jslog(...args) {
 	console.log(JSON.stringify(args, null, 4));
 }
-
-const normalizeRange = (value, minimum, maximum) => {
-	return (value - minimum) / (maximum - minimum);
-};
-
-const binarySearch = (arr, target) => {
-	let left = 0;
-	let right = arr.length - 1;
-	let answer = -1;
-
-	while (left <= right) {
-		const mid = Math.floor((left + right) / 2);
-
-		if (arr[mid] === target) {
-			return mid;
-		}
-
-		if (arr[mid] < target) {
-			left = mid + 1;
-		} else {
-			right = mid - 1;
-		}
-	}
-
-	return answer;
-};
-
-const getClosestValue = (arr, target, leftIndex, rightIndex) => {
-	let left = leftIndex || 0;
-	let right = rightIndex || arr.length - 1;
-	let closestIndex = -1;
-
-	if (leftIndex > rightIndex) {
-		return -1;
-	}
-
-	while (left <= right) {
-		const mid = Math.floor((left + right) / 2);
-
-		if (arr[mid] === target) {
-			return mid;
-		}
-
-		if (
-			closestIndex === -1 ||
-			Math.abs(arr[mid] - target) < Math.abs(arr[closestIndex] - target)
-		) {
-			closestIndex = mid;
-		}
-
-		if (arr[mid] < target) {
-			left = mid + 1;
-		} else {
-			right = mid - 1;
-		}
-	}
-
-	return closestIndex;
-};
 
 function Rheostat({
 	minRange = 0,
@@ -87,6 +20,7 @@ function Rheostat({
 
 	rheostatHeight = 600,
 	rheostatWidth = 200,
+	pitPointType = "bars",
 
 	algorithm = {
 		getValue: (position, minRange, maxRange) => {
@@ -116,6 +50,11 @@ function Rheostat({
 	// const snappingPercentageAlgorithm = snappingPoints.map((point) => {
 	// 	return normalizeRange(point, minRange, maxRange) * 100;
 	// });
+
+	const [topValue, setTopValue] = useState(Math.round(algorithm.getValue(0, minRange, maxRange)));
+	const [bottomValue, setBottomValue] = useState(
+		Math.round(algorithm.getValue(100, minRange, maxRange))
+	);
 
 	const snappingPercentageAlgorithm = snappingPoints.map((point) => {
 		const snapValue = Math.max(0, algorithm.getPosition(point, minRange, maxRange));
@@ -195,11 +134,6 @@ function Rheostat({
 				// Calculate new offset value using drag event
 				offset.value = lastOffset.value + event.translationY;
 
-				jslog({
-					snappingPoints,
-					snappingPercentageAlgorithm,
-				});
-
 				// Apply bounds for the slider handles
 				if (panType === "bottom") {
 					offset.value = Math.max(-(rheostatHeight - handleSize), offset.value);
@@ -265,6 +199,19 @@ function Rheostat({
 						offsetTop.value,
 						newMaxTopPercentage * (rheostatSize / 100)
 					);
+
+					// convert offsetTop.value to percentage
+					const snappedValuePercentage = (offsetTop.value / rheostatSize) * 100;
+
+					// get value from percentage
+					const snappedValueFromPercentage = algorithm.getValue(
+						snappedValuePercentage,
+						minRange,
+						maxRange
+					);
+
+					runOnJS(setTopValue)(Math.round(snappedValueFromPercentage));
+
 					jslog({
 						snappedValue,
 						snappedPercentage,
@@ -289,13 +236,23 @@ function Rheostat({
 						minRange,
 						maxRange
 					);
-					jslog({
-						snappedValue,
-						snappedPercentage,
-					});
+
 					offsetBottom.value = -(rheostatSize - snappedPercentage * (rheostatSize / 100));
-					// Ensure the new bottom offset does not go below the top handle's minimum value
+
 					offsetBottom.value = Math.max(-newMinBottomValue, offsetBottom.value);
+
+					// convert offsetBottom.value to percentage
+					const snappedValuePercentage =
+						100 - ((-1 * offsetBottom.value) / rheostatSize) * 100;
+
+					// get value from percentage
+					const snappedValueFromPercentage = algorithm.getValue(
+						snappedValuePercentage,
+						minRange,
+						maxRange
+					);
+
+					runOnJS(setBottomValue)(Math.round(snappedValueFromPercentage));
 				}
 			})
 			.onFinalize(() => {
@@ -316,11 +273,11 @@ function Rheostat({
 
 	const filledBar = useAnimatedStyle(() => {
 		return {
-			width: 10,
+			width: LineWidth,
 			backgroundColor: "green",
 			position: "absolute",
 			height: rheostatHeight - handleSize - offsetTop.value + offsetBottom.value,
-			left: rheostatWidth / 2 - LineWidth,
+			left: rheostatWidth / 2 - LineWidth / 2,
 			top: offsetTop.value + 25,
 		};
 	});
@@ -346,7 +303,7 @@ function Rheostat({
 					borderColor: "black",
 					overflow: "hidden",
 					borderWidth: 1,
-					borderColor: "white",
+					borderColor: "red",
 				}}
 			>
 				<View
@@ -359,28 +316,22 @@ function Rheostat({
 						top: handleSize / 2,
 					}}
 				>
-					{snappingPercentageAlgorithm.map((point, index) => (
-						<View
-							key={index}
-							style={{
-								width: 100,
-								height: 5,
-								backgroundColor: "green",
-								position: "absolute",
-								top: `${point}%`,
-								left: "0%",
-							}}
-						>
-							<Text
+					{snappingPercentageAlgorithm.map((point, index) => {
+						const width = 10 + (point / 100) * 20;
+						return (
+							<View
+								key={index}
 								style={{
-									color: "white",
-									textAlign: "center",
+									width: width,
+									height: 1,
+									position: "absolute",
+									top: `${point}%`,
+									left: handleSize / 2 + -width / 2 + 24,
+									border: "1px solid white",
 								}}
-							>
-								{point} | {index} | {snappingPoints[index]}
-							</Text>
-						</View>
-					))}
+							></View>
+						);
+					})}
 				</View>
 
 				{/* filled bar */}
@@ -394,29 +345,44 @@ function Rheostat({
 				>
 					{/* top pan */}
 					{hasDoubleHandle && (
-						<GestureDetector gesture={panTop}>
-							<Animated.View
-								style={[
-									{
-										backgroundColor: "#b58df1",
-										width: handleSize,
-										height: handleSize,
-										alignItems: "center",
-										justifyContent: "center",
-										opacity: 0.8,
-										borderRadius: 50,
-										top: 0,
-									},
-									animatedStylesTop,
-								]}
-							>
-								{/* <Text>
-									{transformer(
-										(offsetTopValue / (rheostatHeight - handleSize)) * 100
-									)}
-								</Text> */}
-							</Animated.View>
-						</GestureDetector>
+						<>
+							<GestureDetector gesture={panTop}>
+								<Animated.View
+									style={[
+										{
+											backgroundColor: "#b58df1",
+											width: handleSize,
+											height: handleSize,
+											alignItems: "center",
+											justifyContent: "center",
+											borderRadius: 50,
+											top: 0,
+										},
+										animatedStylesTop,
+									]}
+								>
+									<GestureDetector gesture={panTop}>
+										<Animated.View
+											style={[
+												{
+													backgroundColor: "#b58df1",
+													width: handleSize,
+													height: handleSize,
+													alignItems: "center",
+													justifyContent: "center",
+													top: 0,
+													left: handleSize + 8,
+
+													minWidth: "fit-content",
+												},
+											]}
+										>
+											<Text>{topValue}</Text>
+										</Animated.View>
+									</GestureDetector>
+								</Animated.View>
+							</GestureDetector>
+						</>
 					)}
 
 					{/* bottom pan */}
@@ -429,7 +395,6 @@ function Rheostat({
 									height: handleSize,
 									alignItems: "center",
 									justifyContent: "center",
-									opacity: 0.8,
 									borderRadius: 50,
 									top:
 										rheostatHeight -
@@ -439,10 +404,22 @@ function Rheostat({
 								animatedStylesBottom,
 							]}
 						>
-							{/* <Text>
-								{(-1 * (offsetBottomValue / (rheostatHeight - handleSize)) * 100) // TODO:circlesize is not correct
-									.toFixed(2)}
-							</Text> */}
+							<Animated.View
+								style={[
+									{
+										backgroundColor: "#b58df1",
+										width: handleSize,
+										height: handleSize,
+										alignItems: "center",
+										justifyContent: "center",
+										top: 0,
+										left: handleSize + 8,
+										minWidth: "fit-content",
+									},
+								]}
+							>
+								<Text>{bottomValue}</Text>
+							</Animated.View>
 						</Animated.View>
 					</GestureDetector>
 				</View>

@@ -7,7 +7,29 @@ import algorithm from "./algorithms";
 export default function App() {
 	const minVal = 0;
 	const maxVal = 1000;
-	const range = [minVal, 30, 100, 400, 800, maxVal];
+	const range = [
+		minVal,
+		50,
+		100,
+		150,
+		200,
+		250,
+		300,
+		350,
+		400,
+		450,
+		500,
+		550,
+		600,
+		650,
+		700,
+		750,
+		800,
+		850,
+		900,
+		950,
+		maxVal,
+	];
 
 	return (
 		<View
@@ -25,12 +47,13 @@ export default function App() {
 				maxRange={maxVal}
 				initialTopValue={minVal}
 				initialBottomValue={maxVal}
-				rheostatHeight={600}
+				rheostatHeight={400}
 				rheostatWidth={200}
-				handleSize={50}
+				handleSize={24}
 				shouldSnap={true}
 				snappingPoints={range}
-				algorithm={algorithm.log10}
+				algorithm={algorithm.linear}
+				pitPointType="bars"
 			/>
 		</View>
 	);

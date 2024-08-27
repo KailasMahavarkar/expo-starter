@@ -10,7 +10,7 @@ function jslog(...args) {
     console.log(JSON.stringify(args, null, 4))
 }
 
-const normalizeRange = (value, minimum, maximum) => {
+let normalizeRange = (value, minimum, maximum) => {
     return (value - minimum) / (maximum - minimum);
 };
 
@@ -90,8 +90,8 @@ if (topHandleValue > bottomHandleValue) {
     bottomHandlePercentage = snappingPercentagePoints[bottomHandleIndex]
 }
 
-console.log("leftmost range:", topHandleValue)
-console.log("rightmost range:", bottomHandleValue)
+// console.log("leftmost range:", topHandleValue)
+// console.log("rightmost range:", bottomHandleValue)
 
 // const leftIndex = topHandleIndex
 // const rightIndex = bottomHandleIndex
@@ -115,3 +115,14 @@ console.log("rightmost range:", bottomHandleValue)
 // console.log("bottomHandleIndex", bottomHandleIndex);
 // console.log("bottomHandlePercentage", bottomHandlePercentage);
 // console.log("bottomHandleValue", bottomHandleValue);
+
+
+normalizeRange = (value, minimum, maximum) => {
+    return Math.min(maximum, (value - minimum) / (maximum - minimum) * 24);
+};
+
+
+const x = normalizeRange(24, 5, 24)
+
+console.log("x --> ", x);
+
