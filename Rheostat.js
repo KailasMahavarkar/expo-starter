@@ -163,19 +163,34 @@ function Rheostat({
 		return right >= 0 ? right : left;
 	}
 
-	const getGesturePan = (panType = "bottom") => {
+	function getIndexMoreThanTarget(snappingPoints, target) {
+		let left = 0;
+		let right = snappingPoints.length - 1;
+
+		while (left <= right) {
+			let mid = Math.floor((left + right) / 2);
+
+			if (snappingPoints[mid] <= target) {
+				left = mid + 1;
+			} else {
+				right = mid - 1;
+			}
+		}
+
+		return left;
+	}
+
+	const getGesturePan = (panType) => {
 		const offset = panType === "bottom" ? offsetBottom : offsetTop;
 		const lastOffset = panType === "bottom" ? lastOffsetBottom : lastOffsetTop;
 
 		return Gesture.Pan()
-			.onBegin(() => {
-				jslog({
-					initalValueBottom,
-					initalValueTop,
-				});
-			})
+			.onBegin(() => {})
 			.onChange((event) => {
+				// Calculate new offset value using drag event
 				offset.value = lastOffset.value + event.translationY;
+
+				// Apply bounds for the slider handles
 				if (panType === "bottom") {
 					offset.value = Math.max(-(rheostatHeight - handleSize), offset.value);
 					offset.value = Math.min(0, offset.value);
@@ -184,44 +199,112 @@ function Rheostat({
 					offset.value = Math.min(rheostatHeight - handleSize, offset.value);
 				}
 
-				let topHandlePercentage = (offsetTop.value / rheostatSize) * 100;
-				let bottomHandlePercentage = 100 - ((-1 * offsetBottom.value) / rheostatSize) * 100;
+				// Calculate the handle percentages
+				let handlePercentageTop = (offsetTop.value / rheostatSize) * 100;
+				let handlePercentageBottom = 100 - ((-1 * offsetBottom.value) / rheostatSize) * 100;
 
-				const closestBottomIndex = getClosestIndex(
-					snappingPercentagePoints,
-					bottomHandlePercentage
+				// Adjust handle percentages for non-linear scale
+				const handleValueTop = algorithm.getValue(handlePercentageTop, minRange, maxRange);
+				const handleValueBottom = algorithm.getValue(
+					handlePercentageBottom,
+					minRange,
+					maxRange
 				);
 
-				const topRangeUpperBoundIndex = getIndexLessThanTarget(
-					snappingPercentagePoints,
-					snappingPercentagePoints[closestBottomIndex]
+				// Convert the snapped values back to slider positions
+				let handlePositionTop = algorithm.getPosition(handleValueTop, minRange, maxRange);
+				let handlePositionBottom = algorithm.getPosition(
+					handleValueBottom,
+					minRange,
+					maxRange
 				);
 
-				const closestTopIndex = getClosestIndex(
-					snappingPercentagePoints,
-					topHandlePercentage
-				);
-
-				const finalTopOffsetIndex = getClosestIndex(
-					snappingPercentagePoints,
-					topHandlePercentage,
-					0,
-					topRangeUpperBoundIndex - 1
-				);
-
-				const finalBottomOffsetIndex = Math.max(
-					closestTopIndex + 1,
-					getClosestIndex(snappingPercentagePoints, bottomHandlePercentage)
-				);
-
-				if (panType === "top") {
-					offsetTop.value =
-						snappingPercentagePoints[finalTopOffsetIndex] * (rheostatSize / 100);
-				} else {
-					offsetBottom.value = -(
-						rheostatSize -
-						snappingPercentagePoints[finalBottomOffsetIndex] * (rheostatSize / 100)
+				// Snapping logic only if snapping is enabled
+				if (shouldSnap) {
+					const closestSnappingIndexTop = getClosestIndex(
+						snappingPercentagePoints,
+						handlePositionTop
 					);
+					const closestSnappingIndexBottom = getClosestIndex(
+						snappingPercentagePoints,
+						handlePositionBottom
+					);
+
+					if (panType === "top") {
+						// Handle snapping for the top handle
+						const lessTargetIndex = getIndexLessThanTarget(
+							snappingPercentagePoints,
+							handlePositionBottom
+						);
+
+						const newMaxTopPercentage = snappingPercentagePoints[lessTargetIndex];
+
+						// Find the closest snapping value using the algorithm's value computation
+						const snappedValue = algorithm.getValue(
+							snappingPercentagePoints[closestSnappingIndexTop],
+							minRange,
+							maxRange
+						);
+
+						// Find the exact slider position using the algorithm's position computation
+						const snappedPercentage = algorithm.getPosition(
+							snappedValue,
+							minRange,
+							maxRange
+						);
+
+						offsetTop.value = snappedPercentage * (rheostatSize / 100);
+
+						// Ensure the new top offset does not exceed the bottom handle's maximum value
+						offsetTop.value = Math.min(
+							offsetTop.value,
+							newMaxTopPercentage * (rheostatSize / 100)
+						);
+
+						jslog({
+							snappedValue,
+							snappedPercentage,
+						});
+					} else {
+						// Handle snapping for the bottom handle
+						const moreTargetIndex = getIndexMoreThanTarget(
+							snappingPercentagePoints,
+							handlePositionTop
+						);
+
+						const newMinBottomPercentage =
+							100 - snappingPercentagePoints[moreTargetIndex];
+						const newMinBottomValue = newMinBottomPercentage * (rheostatSize / 100);
+
+						// Calculate the snapped value and position for the bottom handle
+						const snappedValue = algorithm.getValue(
+							snappingPercentagePoints[closestSnappingIndexBottom],
+							minRange,
+							maxRange
+						);
+
+						const snappedPercentage = algorithm.getPosition(
+							snappedValue,
+							minRange,
+							maxRange
+						);
+
+						jslog({
+							snappedValue,
+							snappedPercentage,
+						});
+
+						offsetBottom.value = -(
+							rheostatSize -
+							snappedPercentage * (rheostatSize / 100)
+						);
+
+						// Ensure the new bottom offset does not go below the top handle's minimum value
+						offsetBottom.value = Math.max(-newMinBottomValue, offsetBottom.value);
+					}
+				} else {
+					// offsetTop.value = Math.min(offsetTop.value, offsetBottom.value - handleSize);
+					// offsetBottom.value = Math.max(offsetBottom.value, offsetTop.value + handleSize);
 				}
 			})
 			.onFinalize(() => {

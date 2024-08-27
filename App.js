@@ -3,9 +3,32 @@ import { registerRootComponent } from "expo";
 import { View } from "react-native";
 import Rheostat from "./Rheostat";
 
+const quadraticAlgorithm = {
+	getValue: (position, minRange, maxRange) => {
+		const normalizedPosition = position / 100;
+		return minRange + Math.pow(normalizedPosition, 2) * (maxRange - minRange);
+	},
+	getPosition: (value, minRange, maxRange) => {
+		const normalizedValue = (value - minRange) / (maxRange - minRange);
+		return Math.sqrt(normalizedValue) * 100;
+	},
+};
+
 export default function App() {
 	const minRange = 0;
 	const maxRange = 800;
+
+	const algorithm = {
+		linear: {
+			getValue: (position, minRange, maxRange) => {
+				return minRange + (position / 100) * (maxRange - minRange);
+			},
+			getPosition: (value, minRange, maxRange) => {
+				return ((value - minRange) / (maxRange - minRange)) * 100;
+			},
+		},
+		quadratic: quadraticAlgorithm,
+	};
 
 	return (
 		<View
@@ -19,39 +42,16 @@ export default function App() {
 			}}
 		>
 			<Rheostat
-				// Linear scale
-				// algorithm={{
-				// 	getValue: (position, minRange, maxRange) => {
-				// 		return minRange + (position / 100) * (maxRange - minRange);
-				// 	},
-				// 	getPosition: (value, minRange, maxRange) => {
-				// 		return ((value - minRange) / (maxRange - minRange)) * 100;
-				// 	},
-				// }}
-
-				// Exponential scale
-				algorithm={{
-					getValue: (position, minRange, maxRange) => {
-						return minRange * Math.pow(maxRange / minRange, position / 100);
-					},
-					getPosition: (value, minRange, maxRange) => {
-						return 100 * (Math.log(value / minRange) / Math.log(maxRange / minRange));
-					},
-				}}
-				initialTopValue={200}
-				initialBottomValue={maxRange}
-				minRange={minRange}
-				maxRange={maxRange}
-				snappingPoints={[minRange, 50, 100, 200, 400, maxRange]}
-				handleSize={50}
+				minRange={0}
+				maxRange={1000}
+				initialTopValue={0}
+				initialBottomValue={750}
 				rheostatHeight={600}
 				rheostatWidth={200}
-				shouldSnap={true}
-				transformer={(value) => {
-					// make a exponential scale
-					return Math.pow(2, value / 10).toFixed(2);
-				}}
-				values={[0, 100]}
+				handleSize={50}
+				shouldSnap={false}
+				snappingPoints={[0, 250, 500, 750, 1000]}
+				algorithm={quadraticAlgorithm}
 			/>
 		</View>
 	);
