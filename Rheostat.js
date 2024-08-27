@@ -47,6 +47,10 @@ const getClosestValue = (arr, target, leftIndex, rightIndex) => {
 	let right = rightIndex || arr.length - 1;
 	let closestIndex = -1;
 
+	if (leftIndex > rightIndex) {
+		return -1;
+	}
+
 	while (left <= right) {
 		const mid = Math.floor((left + right) / 2);
 
@@ -84,6 +88,15 @@ function Rheostat({
 	rheostatHeight = 600,
 	rheostatWidth = 200,
 
+	algorithm = {
+		getValue: (position, minRange, maxRange) => {
+			return minRange + (position / 100) * (maxRange - minRange);
+		},
+		getPosition: (value, minRange, maxRange) => {
+			return ((value - minRange) / (maxRange - minRange)) * 100;
+		},
+	},
+
 	handleSize = 20,
 }) {
 	const rheostatSize = rheostatHeight - handleSize;
@@ -104,45 +117,51 @@ function Rheostat({
 		return normalizeRange(point, minRange, maxRange) * 100;
 	});
 
-	const getFilledPercentageTop = () => {
-		const percentHeight = rheostatHeight - handleSize;
-		const filledPercent = (offsetTop.value / percentHeight) * 100;
-
-		if (shouldSnap) {
-			const closestTopIndex = getClosestValue(snappingPercentagePoints, filledPercent);
-			const value = snappingPercentagePoints[closestTopIndex];
-			return value;
-		}
-
-		return filledPercent;
-	};
-
-	const getFilledPercentageBottom = () => {
-		const percentHeight = rheostatHeight - handleSize;
-		const filledPercent = ((-1 * offsetBottom.value) / percentHeight) * 100;
-
-		if (shouldSnap) {
-			const closestBottomIndex = getClosestValue(
-				snappingPercentagePoints,
-				100 - filledPercent
-			);
-			const value = snappingPercentagePoints[closestBottomIndex];
-			return value;
-		}
-
-		return filledPercent;
-	};
+	const snappingPointLength = snappingPoints.length - 1;
 
 	const LineWidth = 4;
 	const hasDoubleHandle = true;
 
-	// useDerivedValue(() => {
-	// 	runOnJS(setOffsetTopValue)(offsetTop.value);
-	// }, [offsetTopValue]);
+	function getClosestIndex(snappingPoints, target, leftIndex, rightIndex) {
+		let left = leftIndex || 0;
+		let right = rightIndex || snappingPointLength;
 
-	// useDerivedValue(() => {
-	// 	runOnJS(setOffsetBottomValue)(offsetBottom.value);
-	// }, [offsetBottomValue]);
+		while (left <= right) {
+			let mid = Math.floor((left + right) / 2);
+
+			if (snappingPoints[mid] === target) {
+				return mid;
+			} else if (snappingPoints[mid] < target) {
+				left = mid + 1;
+			} else {
+				right = mid - 1;
+			}
+		}
+
+		// If the target is not found, find the closest index
+		let closestIndex =
+			Math.abs(snappingPoints[left] - target) < Math.abs(snappingPoints[right] - target)
+				? left
+				: right;
+		return closestIndex;
+	}
+
+	function getIndexLessThanTarget(snappingPoints, target) {
+		let left = 0;
+		let right = snappingPointLength;
+
+		while (left <= right) {
+			let mid = Math.floor((left + right) / 2);
+
+			if (snappingPoints[mid] >= target) {
+				right = mid - 1;
+			} else {
+				left = mid + 1;
+			}
+		}
+
+		return right >= 0 ? right : left;
+	}
 
 	const getGesturePan = (panType = "bottom") => {
 		const offset = panType === "bottom" ? offsetBottom : offsetTop;
@@ -157,10 +176,6 @@ function Rheostat({
 			})
 			.onChange((event) => {
 				offset.value = lastOffset.value + event.translationY;
-
-				const filledPercentageTop = getFilledPercentageTop();
-				const filledPercentageBottom = getFilledPercentageBottom();
-
 				if (panType === "bottom") {
 					offset.value = Math.max(-(rheostatHeight - handleSize), offset.value);
 					offset.value = Math.min(0, offset.value);
@@ -169,42 +184,44 @@ function Rheostat({
 					offset.value = Math.min(rheostatHeight - handleSize, offset.value);
 				}
 
-				if (shouldSnap) {
-					if (panType === "bottom") {
-						const topIndex = binarySearch(
-							snappingPercentagePoints,
-							filledPercentageTop
-						);
+				let topHandlePercentage = (offsetTop.value / rheostatSize) * 100;
+				let bottomHandlePercentage = 100 - ((-1 * offsetBottom.value) / rheostatSize) * 100;
 
-						const closestBottomIndex = getClosestValue(
-							snappingPercentagePoints,
-							filledPercentageBottom,
-							topIndex + 1,
-							snappingPercentagePoints.length - 1
-						);
-						const closestSnappingPercentage =
-							snappingPercentagePoints[closestBottomIndex];
-						const rheostatSize = rheostatHeight - handleSize;
-						const snapValue =
-							rheostatSize - (closestSnappingPercentage / 100) * rheostatSize;
-						offsetBottom.value = -snapValue;
-					} else {
-						const bottomIndex = binarySearch(
-							snappingPercentagePoints,
-							filledPercentageBottom
-						);
+				const closestBottomIndex = getClosestIndex(
+					snappingPercentagePoints,
+					bottomHandlePercentage
+				);
 
-						const closestTopIndex = getClosestValue(
-							snappingPercentagePoints,
-							filledPercentageTop,
-							0,
-							bottomIndex
-						);
+				const topRangeUpperBoundIndex = getIndexLessThanTarget(
+					snappingPercentagePoints,
+					snappingPercentagePoints[closestBottomIndex]
+				);
 
-						const closestPercentage = snappingPercentagePoints[closestTopIndex];
-						const snapValue = (closestPercentage / 100) * (rheostatHeight - handleSize);
-						offsetTop.value = snapValue;
-					}
+				const closestTopIndex = getClosestIndex(
+					snappingPercentagePoints,
+					topHandlePercentage
+				);
+
+				const finalTopOffsetIndex = getClosestIndex(
+					snappingPercentagePoints,
+					topHandlePercentage,
+					0,
+					topRangeUpperBoundIndex - 1
+				);
+
+				const finalBottomOffsetIndex = Math.max(
+					closestTopIndex + 1,
+					getClosestIndex(snappingPercentagePoints, bottomHandlePercentage)
+				);
+
+				if (panType === "top") {
+					offsetTop.value =
+						snappingPercentagePoints[finalTopOffsetIndex] * (rheostatSize / 100);
+				} else {
+					offsetBottom.value = -(
+						rheostatSize -
+						snappingPercentagePoints[finalBottomOffsetIndex] * (rheostatSize / 100)
+					);
 				}
 			})
 			.onFinalize(() => {
@@ -254,6 +271,8 @@ function Rheostat({
 					borderStyle: "solid",
 					borderColor: "black",
 					overflow: "hidden",
+					borderWidth: 1,
+					borderColor: "white",
 				}}
 			>
 				<View
@@ -277,7 +296,16 @@ function Rheostat({
 								top: `${point}%`,
 								left: "0%",
 							}}
-						/>
+						>
+							<Text
+								style={{
+									color: "white",
+									textAlign: "center",
+								}}
+							>
+								{point} | {index} | {snappingPoints[index]}
+							</Text>
+						</View>
 					))}
 				</View>
 
