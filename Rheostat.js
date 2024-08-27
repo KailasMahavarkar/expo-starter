@@ -51,9 +51,17 @@ function Rheostat({
 	// 	return normalizeRange(point, minRange, maxRange) * 100;
 	// });
 
-	const [topValue, setTopValue] = useState(Math.round(algorithm.getValue(0, minRange, maxRange)));
+	const [topValue, setTopValue] = useState(
+		Math.round(algorithm.getValue((initalValueTop / rheostatSize) * 100, minRange, maxRange))
+	);
 	const [bottomValue, setBottomValue] = useState(
-		Math.round(algorithm.getValue(100, minRange, maxRange))
+		Math.round(
+			algorithm.getValue(
+				initalValueBottom,
+				minRange,
+				maxRange
+			)
+		)
 	);
 
 	const snappingPercentageAlgorithm = snappingPoints.map((point) => {

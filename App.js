@@ -45,8 +45,8 @@ export default function App() {
 			<Rheostat
 				minRange={minVal}
 				maxRange={maxVal}
-				initialTopValue={minVal}
-				initialBottomValue={maxVal}
+				initialTopValue={500}
+				initialBottomValue={900}
 				rheostatHeight={400}
 				rheostatWidth={200}
 				handleSize={24}
