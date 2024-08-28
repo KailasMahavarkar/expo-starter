@@ -1,12 +1,13 @@
 import "@expo/metro-runtime";
 import { registerRootComponent } from "expo";
-import { View } from "react-native";
+import { Button, View } from "react-native";
+import React, { useState } from "react";
 import Rheostat from "./Rheostat";
 import algorithm from "./algorithms";
 
 export default function App() {
 	const minVal = 0;
-	const maxVal = 1000;
+	const maxVal = 800;
 	const range = [
 		minVal,
 		50,
@@ -25,11 +26,14 @@ export default function App() {
 		700,
 		750,
 		800,
-		850,
-		900,
-		950,
-		maxVal,
+		// 850,
+		// 900,
+		// 950,
+		// maxVal,
 	];
+
+	const [topValue, setTopValue] = useState(minVal);
+	const [bottomValue, setBottomValue] = useState(maxVal);
 
 	return (
 		<View
@@ -42,19 +46,30 @@ export default function App() {
 				borderColor: "white",
 			}}
 		>
-			<Rheostat
-				minRange={minVal}
-				maxRange={maxVal}
-				initialTopValue={500}
-				initialBottomValue={900}
-				rheostatHeight={400}
-				rheostatWidth={200}
-				handleSize={24}
-				shouldSnap={true}
-				snappingPoints={range}
-				algorithm={algorithm.linear}
-				pitPointType="bars"
-			/>
+			<View>
+				<Rheostat
+					minRange={minVal}
+					maxRange={maxVal}
+					topValue={topValue}
+					bottomValue={bottomValue}
+					rheostatHeight={600}
+					rheostatWidth={200}
+					handleSize={50}
+					shouldSnap={true}
+					snappingPoints={range}
+					algorithm={algorithm.linear}
+					showSnapBars={true}
+				/>
+				<View>
+					<Button
+						onPress={() => {
+							setTopValue(200);
+							setBottomValue(600);
+						}}
+						title="Test"
+					/>
+				</View>
+			</View>
 		</View>
 	);
 }

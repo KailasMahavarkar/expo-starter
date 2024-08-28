@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { StyleSheet, View, Text } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, runOnJS } from "react-native-reanimated";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import algo from "./algorithms";
 
 function jslog(...args) {
 	console.log(JSON.stringify(args, null, 4));
@@ -12,57 +13,53 @@ function Rheostat({
 	minRange = 0,
 	maxRange = 1000,
 
-	initialTopValue = 0,
-	initialBottomValue = 100,
+	topValue = 0,
+	bottomValue = 100,
 
 	shouldSnap = true,
 	snappingPoints = [0, 100],
 
 	rheostatHeight = 600,
 	rheostatWidth = 200,
-	pitPointType = "bars",
+	showSnapBars = false,
 
-	algorithm = {
-		getValue: (position, minRange, maxRange) => {
-			return minRange + (position / 100) * (maxRange - minRange);
-		},
-		getPosition: (value, minRange, maxRange) => {
-			return ((value - minRange) / (maxRange - minRange)) * 100;
-		},
-	},
+	algorithm = algo.linear,
 
 	handleSize = 20,
 }) {
 	const rheostatSize = rheostatHeight - handleSize;
-	const valueTopPercentage = initialTopValue / maxRange;
-	const valueBottomPercentage = initialBottomValue / maxRange;
-	const initalValueTop = valueTopPercentage * rheostatSize;
-	const initalValueBottom = rheostatSize - valueBottomPercentage * rheostatSize;
+	const topPercentage = algorithm.getPosition(topValue, minRange, maxRange);
+	const bottomPercentage = algorithm.getPosition(bottomValue, minRange, maxRange);
+	const topOffset = topPercentage * (rheostatSize / 100);
+	const bottomOffset = rheostatSize - bottomPercentage * (rheostatSize / 100);
 
-	// // Circle 1 - Top
-	const offsetTop = useSharedValue(initalValueTop);
-	const lastOffsetTop = useSharedValue(initalValueTop);
+	// re-animated states
+	const animatedOffsetTop = useSharedValue(topOffset);
+	const animatedLastOffsetTop = useSharedValue(topOffset);
+	const animatedOffsetBottom = useSharedValue(-bottomOffset);
+	const animatedLastOffsetBottom = useSharedValue(-bottomOffset);
 
-	// // Circle 2 - Bottom
-	const offsetBottom = useSharedValue(-initalValueBottom);
-	const lastOffsetBottom = useSharedValue(-initalValueBottom);
+	const [currentTopValue, setCurrentTopValue] = useState(topValue);
+	const [currentBottomValue, setCurrentBottomValue] = useState(bottomValue);
 
-	// const snappingPercentageAlgorithm = snappingPoints.map((point) => {
-	// 	return normalizeRange(point, minRange, maxRange) * 100;
-	// });
+	useEffect(() => {
+		const percentage = algorithm.getPosition(topValue, 0, maxRange);
+		const value = algorithm.getValue(percentage, minRange, maxRange);
+		animatedOffsetTop.value = percentage * (rheostatSize / 100);
+		animatedLastOffsetTop.value = percentage * (rheostatSize / 100);
+		setCurrentTopValue(value);
+	}, [topValue]);
 
-	const [topValue, setTopValue] = useState(
-		Math.round(algorithm.getValue((initalValueTop / rheostatSize) * 100, minRange, maxRange))
-	);
-	const [bottomValue, setBottomValue] = useState(
-		Math.round(
-			algorithm.getValue(
-				initalValueBottom,
-				minRange,
-				maxRange
-			)
-		)
-	);
+	useEffect(() => {
+		const percentage = algorithm.getPosition(bottomValue, 0, maxRange);
+		const value = algorithm.getValue(percentage, minRange, maxRange);
+		const percentageInverted = 100 - percentage;
+
+		animatedOffsetBottom.value = -(percentageInverted * (rheostatSize / 100));
+		animatedLastOffsetBottom.value = -(percentageInverted * (rheostatSize / 100));
+
+		setCurrentBottomValue(value);
+	}, [bottomValue]);
 
 	const snappingPercentageAlgorithm = snappingPoints.map((point) => {
 		const snapValue = Math.max(0, algorithm.getPosition(point, minRange, maxRange));
@@ -133,8 +130,8 @@ function Rheostat({
 	}
 
 	const getGesturePan = (panType) => {
-		const offset = panType === "bottom" ? offsetBottom : offsetTop;
-		const lastOffset = panType === "bottom" ? lastOffsetBottom : lastOffsetTop;
+		const offset = panType === "bottom" ? animatedOffsetBottom : animatedOffsetTop;
+		const lastOffset = panType === "bottom" ? animatedLastOffsetBottom : animatedLastOffsetTop;
 
 		return Gesture.Pan()
 			.onBegin(() => {})
@@ -152,8 +149,9 @@ function Rheostat({
 				}
 
 				// Calculate the handle percentages
-				let handlePercentageTop = (offsetTop.value / rheostatSize) * 100;
-				let handlePercentageBottom = 100 - ((-1 * offsetBottom.value) / rheostatSize) * 100;
+				let handlePercentageTop = (animatedOffsetTop.value / rheostatSize) * 100;
+				let handlePercentageBottom =
+					100 - ((-1 * animatedOffsetBottom.value) / rheostatSize) * 100;
 
 				// Adjust handle percentages for non-linear scale
 				const handleValueTop = algorithm.getValue(handlePercentageTop, minRange, maxRange);
@@ -172,7 +170,6 @@ function Rheostat({
 				);
 
 				// Snapping logic only if snapping is enabled
-				// if (shouldSnap) {
 				const closestSnappingIndexTop = getClosestIndex(
 					snappingPercentageAlgorithm,
 					handlePositionTop
@@ -182,85 +179,132 @@ function Rheostat({
 					handlePositionBottom
 				);
 
-				if (panType === "top") {
-					// Handle snapping for the top handle
-					const lessTargetIndex = getIndexLessThanTarget(
-						snappingPercentageAlgorithm,
-						handlePositionBottom
-					);
-					const newMaxTopPercentage = snappingPercentageAlgorithm[lessTargetIndex];
-					// Find the closest snapping value using the algorithm's value computation
-					const snappedValue = algorithm.getValue(
-						snappingPercentageAlgorithm[closestSnappingIndexTop],
-						minRange,
-						maxRange
-					);
-					// Find the exact slider position using the algorithm's position computation
-					const snappedPercentage = algorithm.getPosition(
-						snappedValue,
-						minRange,
-						maxRange
-					);
-					offsetTop.value = snappedPercentage * (rheostatSize / 100);
-					// Ensure the new top offset does not exceed the bottom handle's maximum value
-					offsetTop.value = Math.min(
-						offsetTop.value,
-						newMaxTopPercentage * (rheostatSize / 100)
-					);
-
-					// convert offsetTop.value to percentage
-					const snappedValuePercentage = (offsetTop.value / rheostatSize) * 100;
-
-					// get value from percentage
-					const snappedValueFromPercentage = algorithm.getValue(
-						snappedValuePercentage,
-						minRange,
-						maxRange
-					);
-
-					runOnJS(setTopValue)(Math.round(snappedValueFromPercentage));
-
-					jslog({
-						snappedValue,
-						snappedPercentage,
-					});
+				if (shouldSnap) {
+					if (panType === "top") {
+						// Handle snapping for the top handle
+						const lessTargetIndex = getIndexLessThanTarget(
+							snappingPercentageAlgorithm,
+							handlePositionBottom
+						);
+						const newMaxTopPercentage = snappingPercentageAlgorithm[lessTargetIndex];
+						// Find the closest snapping value using the algorithm's value computation
+						const snappedValue = algorithm.getValue(
+							snappingPercentageAlgorithm[closestSnappingIndexTop],
+							minRange,
+							maxRange
+						);
+						// Find the exact slider position using the algorithm's position computation
+						const snappedPercentage = algorithm.getPosition(
+							snappedValue,
+							minRange,
+							maxRange
+						);
+						animatedOffsetTop.value = snappedPercentage * (rheostatSize / 100);
+						// Ensure the new top offset does not exceed the bottom handle's maximum value
+						animatedOffsetTop.value = Math.min(
+							animatedOffsetTop.value,
+							newMaxTopPercentage * (rheostatSize / 100)
+						);
+						// convert animatedOffsetTop.value to percentage
+						const snappedValuePercentage =
+							(animatedOffsetTop.value / rheostatSize) * 100;
+						// get value from percentage
+						const snappedValueFromPercentage = algorithm.getValue(
+							snappedValuePercentage,
+							minRange,
+							maxRange
+						);
+						runOnJS(setCurrentTopValue)(Math.round(snappedValueFromPercentage));
+						jslog({
+							snappedValue,
+							snappedPercentage,
+						});
+					} else {
+						// Handle snapping for the bottom handle
+						const moreTargetIndex = getIndexMoreThanTarget(
+							snappingPercentageAlgorithm,
+							handlePositionTop
+						);
+						const newMinBottomPercentage =
+							100 - snappingPercentageAlgorithm[moreTargetIndex];
+						const newMinBottomValue = newMinBottomPercentage * (rheostatSize / 100);
+						// Calculate the snapped value and position for the bottom handle
+						const snappedValue = algorithm.getValue(
+							snappingPercentageAlgorithm[closestSnappingIndexBottom],
+							minRange,
+							maxRange
+						);
+						const snappedPercentage = algorithm.getPosition(
+							snappedValue,
+							minRange,
+							maxRange
+						);
+						animatedOffsetBottom.value = -(
+							rheostatSize -
+							snappedPercentage * (rheostatSize / 100)
+						);
+						animatedOffsetBottom.value = Math.max(
+							-newMinBottomValue,
+							animatedOffsetBottom.value
+						);
+						// convert animatedOffsetBottom.value to percentage
+						const snappedValuePercentage =
+							100 - ((-1 * animatedOffsetBottom.value) / rheostatSize) * 100;
+						// get value from percentage
+						const snappedValueFromPercentage = algorithm.getValue(
+							snappedValuePercentage,
+							minRange,
+							maxRange
+						);
+						runOnJS(setCurrentBottomValue)(Math.round(snappedValueFromPercentage));
+					}
 				} else {
-					// Handle snapping for the bottom handle
-					const moreTargetIndex = getIndexMoreThanTarget(
-						snappingPercentageAlgorithm,
-						handlePositionTop
-					);
-					const newMinBottomPercentage =
-						100 - snappingPercentageAlgorithm[moreTargetIndex];
-					const newMinBottomValue = newMinBottomPercentage * (rheostatSize / 100);
-					// Calculate the snapped value and position for the bottom handle
-					const snappedValue = algorithm.getValue(
-						snappingPercentageAlgorithm[closestSnappingIndexBottom],
-						minRange,
-						maxRange
-					);
-					const snappedPercentage = algorithm.getPosition(
-						snappedValue,
-						minRange,
-						maxRange
-					);
-
-					offsetBottom.value = -(rheostatSize - snappedPercentage * (rheostatSize / 100));
-
-					offsetBottom.value = Math.max(-newMinBottomValue, offsetBottom.value);
-
-					// convert offsetBottom.value to percentage
-					const snappedValuePercentage =
-						100 - ((-1 * offsetBottom.value) / rheostatSize) * 100;
-
-					// get value from percentage
-					const snappedValueFromPercentage = algorithm.getValue(
-						snappedValuePercentage,
-						minRange,
-						maxRange
-					);
-
-					runOnJS(setBottomValue)(Math.round(snappedValueFromPercentage));
+					let isOverLapping = false;
+					if (
+						animatedOffsetTop.value +
+							Math.abs(animatedOffsetBottom.value) +
+							handleSize >
+						rheostatSize
+					) {
+						isOverLapping = true;
+					}
+					if (panType === "top" && isOverLapping) {
+						const newTop =
+							rheostatHeight -
+							(Math.abs(animatedOffsetBottom.value) + 2 * handleSize);
+						animatedOffsetTop.value = newTop;
+					}
+					if (panType === "bottom" && isOverLapping) {
+						const newBottom = rheostatSize - (animatedOffsetTop.value + handleSize);
+						animatedOffsetBottom.value = -newBottom;
+					}
+					if (panType === "top") {
+						// convert animatedOffsetTop.value to percentage
+						const snappedValuePercentage =
+							(animatedOffsetTop.value / rheostatSize) * 100;
+						// get value from percentage
+						const snappedValueFromPercentage = algorithm.getValue(
+							snappedValuePercentage,
+							minRange,
+							maxRange
+						);
+						runOnJS(setCurrentTopValue)(Math.round(snappedValueFromPercentage));
+					} else {
+						// convert animatedOffsetBottom.value to percentage
+						const snappedValuePercentage =
+							100 - ((-1 * animatedOffsetBottom.value) / rheostatSize) * 100;
+						// get value from percentage
+						const snappedValueFromPercentage = algorithm.getValue(
+							snappedValuePercentage,
+							minRange,
+							maxRange
+						);
+						runOnJS(setCurrentBottomValue)(Math.round(snappedValueFromPercentage));
+					}
+					jslog({
+						handlePercentageTop,
+						handlePercentageBottom,
+					});
 				}
 			})
 			.onFinalize(() => {
@@ -270,23 +314,24 @@ function Rheostat({
 	};
 
 	const animatedStylesTop = useAnimatedStyle(() => ({
-		transform: [{ translateY: offsetTop.value }],
-		backgroundColor: "#b58df1",
+		transform: [{ translateY: animatedOffsetTop.value }],
+		backgroundColor: "#00857a",
 	}));
 
 	const animatedStylesBottom = useAnimatedStyle(() => ({
-		transform: [{ translateY: offsetBottom.value }],
-		backgroundColor: "#87CEFA",
+		transform: [{ translateY: animatedOffsetBottom.value }],
+		backgroundColor: "#00857a",
 	}));
 
 	const filledBar = useAnimatedStyle(() => {
 		return {
 			width: LineWidth,
-			backgroundColor: "green",
+			backgroundColor: "#00857a",
 			position: "absolute",
-			height: rheostatHeight - handleSize - offsetTop.value + offsetBottom.value,
+			height:
+				rheostatHeight - handleSize - animatedOffsetTop.value + animatedOffsetBottom.value,
 			left: rheostatWidth / 2 - LineWidth / 2,
-			top: offsetTop.value + 25,
+			top: animatedOffsetTop.value + 25,
 		};
 	});
 
@@ -309,7 +354,6 @@ function Rheostat({
 					borderWidth: 1,
 					borderStyle: "solid",
 					borderColor: "black",
-					overflow: "hidden",
 					borderWidth: 1,
 					borderColor: "red",
 				}}
@@ -324,22 +368,24 @@ function Rheostat({
 						top: handleSize / 2,
 					}}
 				>
-					{snappingPercentageAlgorithm.map((point, index) => {
-						const width = 10 + (point / 100) * 20;
-						return (
-							<View
-								key={index}
-								style={{
-									width: width,
-									height: 1,
-									position: "absolute",
-									top: `${point}%`,
-									left: handleSize / 2 + -width / 2 + 24,
-									border: "1px solid white",
-								}}
-							></View>
-						);
-					})}
+					{shouldSnap &&
+						showSnapBars &&
+						snappingPercentageAlgorithm.map((point, index) => {
+							const width = 10 + (point / 100) * 20;
+							return (
+								<View
+									key={index}
+									style={{
+										width: width,
+										height: 1,
+										position: "absolute",
+										top: `${point}%`,
+										left: handleSize / 2 + -width / 2 + 24,
+										border: "1px solid white",
+									}}
+								></View>
+							);
+						})}
 				</View>
 
 				{/* filled bar */}
@@ -358,7 +404,7 @@ function Rheostat({
 								<Animated.View
 									style={[
 										{
-											backgroundColor: "#b58df1",
+											backgroundColor: "#00857a",
 											width: handleSize,
 											height: handleSize,
 											alignItems: "center",
@@ -373,7 +419,7 @@ function Rheostat({
 										<Animated.View
 											style={[
 												{
-													backgroundColor: "#b58df1",
+													backgroundColor: "#00857a",
 													width: handleSize,
 													height: handleSize,
 													alignItems: "center",
@@ -385,7 +431,7 @@ function Rheostat({
 												},
 											]}
 										>
-											<Text>{topValue}</Text>
+											<Text>{currentTopValue}</Text>
 										</Animated.View>
 									</GestureDetector>
 								</Animated.View>
@@ -398,7 +444,7 @@ function Rheostat({
 						<Animated.View
 							style={[
 								{
-									backgroundColor: "#87CEFA",
+									backgroundColor: "#00857a",
 									width: handleSize,
 									height: handleSize,
 									alignItems: "center",
@@ -412,22 +458,24 @@ function Rheostat({
 								animatedStylesBottom,
 							]}
 						>
-							<Animated.View
-								style={[
-									{
-										backgroundColor: "#b58df1",
-										width: handleSize,
-										height: handleSize,
-										alignItems: "center",
-										justifyContent: "center",
-										top: 0,
-										left: handleSize + 8,
-										minWidth: "fit-content",
-									},
-								]}
-							>
-								<Text>{bottomValue}</Text>
-							</Animated.View>
+							<GestureDetector gesture={panBottom}>
+								<Animated.View
+									style={[
+										{
+											backgroundColor: "#00857a",
+											width: handleSize,
+											height: handleSize,
+											alignItems: "center",
+											justifyContent: "center",
+											top: 0,
+											left: handleSize + 8,
+											minWidth: "fit-content",
+										},
+									]}
+								>
+									<Text>{Math.round(currentBottomValue)}</Text>
+								</Animated.View>
+							</GestureDetector>
 						</Animated.View>
 					</GestureDetector>
 				</View>
