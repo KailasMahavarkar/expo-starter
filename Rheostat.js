@@ -148,38 +148,46 @@ function Rheostat({
 					offset.value = Math.min(rheostatHeight - handleSize, offset.value);
 				}
 
-				// Calculate the handle percentages
-				let handlePercentageTop = (animatedOffsetTop.value / rheostatSize) * 100;
-				let handlePercentageBottom =
-					100 - ((-1 * animatedOffsetBottom.value) / rheostatSize) * 100;
-
-				// Adjust handle percentages for non-linear scale
-				const handleValueTop = algorithm.getValue(handlePercentageTop, minRange, maxRange);
-				const handleValueBottom = algorithm.getValue(
-					handlePercentageBottom,
-					minRange,
-					maxRange
-				);
-
-				// Convert the snapped values back to slider positions
-				let handlePositionTop = algorithm.getPosition(handleValueTop, minRange, maxRange);
-				let handlePositionBottom = algorithm.getPosition(
-					handleValueBottom,
-					minRange,
-					maxRange
-				);
-
-				// Snapping logic only if snapping is enabled
-				const closestSnappingIndexTop = getClosestIndex(
-					snappingPercentageAlgorithm,
-					handlePositionTop
-				);
-				const closestSnappingIndexBottom = getClosestIndex(
-					snappingPercentageAlgorithm,
-					handlePositionBottom
-				);
-
 				if (shouldSnap) {
+					// Calculate the handle percentages
+					let handlePercentageTop = (animatedOffsetTop.value / rheostatSize) * 100;
+					let handlePercentageBottom =
+						100 - ((-1 * animatedOffsetBottom.value) / rheostatSize) * 100;
+
+					// Adjust handle percentages for non-linear scale
+					const handleValueTop = algorithm.getValue(
+						handlePercentageTop,
+						minRange,
+						maxRange
+					);
+					const handleValueBottom = algorithm.getValue(
+						handlePercentageBottom,
+						minRange,
+						maxRange
+					);
+
+					// Convert the snapped values back to slider positions
+					let handlePositionTop = algorithm.getPosition(
+						handleValueTop,
+						minRange,
+						maxRange
+					);
+					let handlePositionBottom = algorithm.getPosition(
+						handleValueBottom,
+						minRange,
+						maxRange
+					);
+
+					// Snapping logic only if snapping is enabled
+					const closestSnappingIndexTop = getClosestIndex(
+						snappingPercentageAlgorithm,
+						handlePositionTop
+					);
+					const closestSnappingIndexBottom = getClosestIndex(
+						snappingPercentageAlgorithm,
+						handlePositionBottom
+					);
+
 					if (panType === "top") {
 						// Handle snapping for the top handle
 						const lessTargetIndex = getIndexLessThanTarget(
@@ -215,10 +223,6 @@ function Rheostat({
 							maxRange
 						);
 						runOnJS(setCurrentTopValue)(Math.round(snappedValueFromPercentage));
-						jslog({
-							snappedValue,
-							snappedPercentage,
-						});
 					} else {
 						// Handle snapping for the bottom handle
 						const moreTargetIndex = getIndexMoreThanTarget(
@@ -259,6 +263,7 @@ function Rheostat({
 						runOnJS(setCurrentBottomValue)(Math.round(snappedValueFromPercentage));
 					}
 				} else {
+					// No snapping
 					let isOverLapping = false;
 					if (
 						animatedOffsetTop.value +
@@ -301,10 +306,6 @@ function Rheostat({
 						);
 						runOnJS(setCurrentBottomValue)(Math.round(snappedValueFromPercentage));
 					}
-					jslog({
-						handlePercentageTop,
-						handlePercentageBottom,
-					});
 				}
 			})
 			.onFinalize(() => {
