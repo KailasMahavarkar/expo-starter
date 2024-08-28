@@ -18,6 +18,7 @@ export default function App() {
 		300,
 		350,
 		400,
+        425,
 		450,
 		500,
 		550,
@@ -54,11 +55,12 @@ export default function App() {
 					bottomValue={bottomValue}
 					rheostatHeight={600}
 					rheostatWidth={200}
-					handleSize={50}
-					shouldSnap={true}
+					handleSize={24}
+					shouldSnap={false}
 					snappingPoints={range}
 					algorithm={algorithm.linear}
 					showSnapBars={true}
+                    flipped={false}
 				/>
 				<View>
 					<Button

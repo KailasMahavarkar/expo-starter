@@ -9,6 +9,36 @@ function jslog(...args) {
 	console.log(JSON.stringify(args, null, 4));
 }
 
+const CONSTANTS = {
+	TRIANGLE_SIZE_X: 6,
+	TRIANGLE_SIZE_Y: 8,
+};
+
+const styles = StyleSheet.create({
+	triangleLeft: {
+		borderTopWidth: CONSTANTS.TRIANGLE_SIZE_X,
+		borderBottomWidth: CONSTANTS.TRIANGLE_SIZE_X,
+		borderRightWidth: CONSTANTS.TRIANGLE_SIZE_Y,
+		borderLeftWidth: 0,
+		borderTopColor: "transparent",
+		borderBottomColor: "transparent",
+		borderLeftColor: "#00857a",
+		borderRightColor: "#00857a",
+		position: "absolute",
+	},
+	traingleRight: {
+		borderTopWidth: CONSTANTS.TRIANGLE_SIZE_X,
+		borderBottomWidth: CONSTANTS.TRIANGLE_SIZE_X,
+		borderLeftWidth: CONSTANTS.TRIANGLE_SIZE_Y,
+		borderRightWidth: 0,
+		borderTopColor: "transparent",
+		borderBottomColor: "transparent",
+		borderLeftColor: "#00857a",
+		borderRightColor: "#00857a",
+		position: "absolute",
+	},
+});
+
 function Rheostat({
 	minRange = 0,
 	maxRange = 1000,
@@ -25,8 +55,12 @@ function Rheostat({
 
 	algorithm = algo.linear,
 
+	flipped = false,
+
 	handleSize = 20,
 }) {
+	console.log("flipped", flipped);
+
 	const rheostatSize = rheostatHeight - handleSize;
 	const topPercentage = algorithm.getPosition(topValue, minRange, maxRange);
 	const bottomPercentage = algorithm.getPosition(bottomValue, minRange, maxRange);
@@ -41,6 +75,9 @@ function Rheostat({
 
 	const [currentTopValue, setCurrentTopValue] = useState(topValue);
 	const [currentBottomValue, setCurrentBottomValue] = useState(bottomValue);
+	const snapPoints = flipped
+		? snappingPoints.map((point) => maxRange - point).sort()
+		: snappingPoints;
 
 	useEffect(() => {
 		const percentage = algorithm.getPosition(topValue, 0, maxRange);
@@ -61,26 +98,26 @@ function Rheostat({
 		setCurrentBottomValue(value);
 	}, [bottomValue]);
 
-	const snappingPercentageAlgorithm = snappingPoints.map((point) => {
+	const snappingPercentageAlgorithm = snapPoints.map((point) => {
 		const snapValue = Math.max(0, algorithm.getPosition(point, minRange, maxRange));
 		return Number(snapValue.toFixed(2));
 	});
 
-	const snappingPointLength = snappingPoints.length - 1;
+	const snappingPointLength = snapPoints.length - 1;
 
 	const LineWidth = 4;
 	const hasDoubleHandle = true;
 
-	function getClosestIndex(snappingPoints, target, leftIndex, rightIndex) {
+	function getClosestIndex(snapPoints, target, leftIndex, rightIndex) {
 		let left = leftIndex || 0;
 		let right = rightIndex || snappingPointLength;
 
 		while (left <= right) {
 			let mid = Math.floor((left + right) / 2);
 
-			if (snappingPoints[mid] === target) {
+			if (snapPoints[mid] === target) {
 				return mid;
-			} else if (snappingPoints[mid] < target) {
+			} else if (snapPoints[mid] < target) {
 				left = mid + 1;
 			} else {
 				right = mid - 1;
@@ -89,20 +126,20 @@ function Rheostat({
 
 		// If the target is not found, find the closest index
 		let closestIndex =
-			Math.abs(snappingPoints[left] - target) < Math.abs(snappingPoints[right] - target)
+			Math.abs(snapPoints[left] - target) < Math.abs(snapPoints[right] - target)
 				? left
 				: right;
 		return closestIndex;
 	}
 
-	function getIndexLessThanTarget(snappingPoints, target) {
+	function getIndexLessThanTarget(snapPoints, target) {
 		let left = 0;
 		let right = snappingPointLength;
 
 		while (left <= right) {
 			let mid = Math.floor((left + right) / 2);
 
-			if (snappingPoints[mid] >= target) {
+			if (snapPoints[mid] >= target) {
 				right = mid - 1;
 			} else {
 				left = mid + 1;
@@ -112,14 +149,14 @@ function Rheostat({
 		return right >= 0 ? right : left;
 	}
 
-	function getIndexMoreThanTarget(snappingPoints, target) {
+	function getIndexMoreThanTarget(snapPoints, target) {
 		let left = 0;
-		let right = snappingPoints.length - 1;
+		let right = snapPoints.length - 1;
 
 		while (left <= right) {
 			let mid = Math.floor((left + right) / 2);
 
-			if (snappingPoints[mid] <= target) {
+			if (snapPoints[mid] <= target) {
 				left = mid + 1;
 			} else {
 				right = mid - 1;
@@ -339,6 +376,22 @@ function Rheostat({
 	const panTop = getGesturePan("top");
 	const panBottom = getGesturePan("bottom");
 
+	let computedValueTop = flipped
+		? maxRange - Math.round(currentTopValue)
+		: Math.round(currentTopValue);
+
+	let computedValueBottom = flipped
+		? maxRange - Math.round(currentBottomValue)
+		: Math.round(currentBottomValue);
+
+	let diffTop = Math.abs(computedValueTop.toString().length - maxRange.toString().length);
+	let diffBottom = Math.abs(computedValueBottom.toString().length - maxRange.toString().length);
+
+	jslog({
+		computedValueTop,
+		computedValueBottom,
+	});
+
 	return (
 		<GestureHandlerRootView
 			style={{
@@ -372,7 +425,7 @@ function Rheostat({
 					{shouldSnap &&
 						showSnapBars &&
 						snappingPercentageAlgorithm.map((point, index) => {
-							const width = 10 + (point / 100) * 20;
+							const width = 10 + ((flipped ? 100 - point : point) / 100) * 20;
 							return (
 								<View
 									key={index}
@@ -421,18 +474,41 @@ function Rheostat({
 											style={[
 												{
 													backgroundColor: "#00857a",
-													width: handleSize,
-													height: handleSize,
 													alignItems: "center",
 													justifyContent: "center",
 													top: 0,
-													left: handleSize + 8,
-
+													left: handleSize + 16,
 													minWidth: "fit-content",
+													borderRadius: 3,
 												},
 											]}
 										>
-											<Text>{currentTopValue}</Text>
+											<Text
+												style={{
+													paddingHorizontal: 8,
+													paddingVertical: 4,
+												}}
+											>
+												{computedValueTop}
+												<Text
+													style={{
+														color: "transparent",
+													}}
+												>
+													{"0".repeat(diffTop)}
+												</Text>
+											</Text>
+
+											<View
+												style={[
+													styles.triangleLeft,
+													{
+														position: "absolute",
+
+														left: -CONSTANTS.TRIANGLE_SIZE_Y,
+													},
+												]}
+											></View>
 										</Animated.View>
 									</GestureDetector>
 								</Animated.View>
@@ -464,17 +540,40 @@ function Rheostat({
 									style={[
 										{
 											backgroundColor: "#00857a",
-											width: handleSize,
-											height: handleSize,
 											alignItems: "center",
 											justifyContent: "center",
 											top: 0,
-											left: handleSize + 8,
+											left: handleSize + 16,
 											minWidth: "fit-content",
+											borderRadius: 3,
 										},
 									]}
 								>
-									<Text>{Math.round(currentBottomValue)}</Text>
+									<Text
+										style={{
+											paddingHorizontal: 8,
+											paddingVertical: 4,
+										}}
+									>
+										{computedValueBottom}
+										<Text
+											style={{
+												color: "transparent",
+											}}
+										>
+											{"0".repeat(diffBottom)}
+										</Text>
+									</Text>
+
+									<View
+										style={[
+											styles.triangleLeft,
+											{
+												position: "absolute",
+												left: -CONSTANTS.TRIANGLE_SIZE_Y,
+											},
+										]}
+									></View>
 								</Animated.View>
 							</GestureDetector>
 						</Animated.View>
