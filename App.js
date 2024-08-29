@@ -1,6 +1,6 @@
 import "@expo/metro-runtime";
 import { registerRootComponent } from "expo";
-import { Button, View } from "react-native";
+import { Button, Pressable, View, Text } from "react-native";
 import React, { useState } from "react";
 import Rheostat from "./Rheostat";
 import algorithm from "./algorithms";
@@ -12,20 +12,20 @@ export default function App() {
 		minVal,
 		50,
 		100,
-		150,
+		// 150,
 		200,
-		250,
+		// 250,
 		300,
-		350,
+		// 350,
 		400,
-        425,
-		450,
-		500,
-		550,
-		600,
-		650,
-		700,
-		750,
+		// 425,
+		// 450,
+		// 500,
+		// 550,
+		// 600,
+		// 650,
+		// 700,
+		// 750,
 		800,
 		// 850,
 		// 900,
@@ -35,6 +35,8 @@ export default function App() {
 
 	const [topValue, setTopValue] = useState(minVal);
 	const [bottomValue, setBottomValue] = useState(maxVal);
+	const [flipped, setFlipped] = useState(false);
+	const [update, setUpdate] = useState(false);
 
 	return (
 		<View
@@ -55,21 +57,60 @@ export default function App() {
 					bottomValue={bottomValue}
 					rheostatHeight={600}
 					rheostatWidth={200}
-					handleSize={24}
+					handleSize={30}
+                    handleDelta={5}
 					shouldSnap={false}
 					snappingPoints={range}
 					algorithm={algorithm.linear}
 					showSnapBars={true}
-                    flipped={false}
+					flipped={false}
+                    update={update}
 				/>
-				<View>
-					<Button
-						onPress={() => {
-							setTopValue(200);
-							setBottomValue(600);
+				<View
+					style={{
+						flexDirection: "row",
+						justifyContent: "space-around",
+					}}
+				>
+					<Pressable
+						style={{
+							alignItems: "center",
+							justifyContent: "center",
+							backgroundColor: "pink",
+							padding: 5,
 						}}
-						title="Test"
-					/>
+						onPress={() => {
+							if (!update) {
+								setTopValue(200);
+								setBottomValue(300);
+							} else {
+								setTopValue(minVal);
+								setBottomValue(maxVal);
+							}
+
+                            setUpdate(!update);
+						}}
+					>
+						<View>
+							<Text>Update Values</Text>
+						</View>
+					</Pressable>
+
+					<Pressable
+						style={{
+							alignItems: "center",
+							justifyContent: "center",
+							backgroundColor: "pink",
+							padding: 5,
+						}}
+						onPress={() => {
+							setFlipped(!flipped);
+						}}
+					>
+						<View>
+							<Text>{flipped ? "Flipped" : "Not Flipped"}</Text>
+						</View>
+					</Pressable>
 				</View>
 			</View>
 		</View>
