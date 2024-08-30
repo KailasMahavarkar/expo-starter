@@ -38,6 +38,10 @@ export default function App() {
 	const [flipped, setFlipped] = useState(false);
 	const [update, setUpdate] = useState(false);
 
+	const Label = ({ value }) => {
+		return <Text style={{ color: "white", fontSize: 20 }}>{value}</Text>;
+	};
+
 	return (
 		<View
 			style={{
@@ -55,16 +59,19 @@ export default function App() {
 					maxRange={maxVal}
 					topValue={topValue}
 					bottomValue={bottomValue}
-					rheostatHeight={600}
+					rheostatHeight={400}
 					rheostatWidth={200}
 					handleSize={30}
-                    handleDelta={5}
-					shouldSnap={false}
+					handleDelta={5}
+					shouldSnap={true}
 					snappingPoints={range}
 					algorithm={algorithm.linear}
 					showSnapBars={true}
-					flipped={false}
-                    update={update}
+					flipped={true}
+					update={update}
+					topLabel={<Label value={10} />}
+                    bottomLabel={<Label value={100} />}
+                    suffix=""
 				/>
 				<View
 					style={{
@@ -88,7 +95,7 @@ export default function App() {
 								setBottomValue(maxVal);
 							}
 
-                            setUpdate(!update);
+							setUpdate(!update);
 						}}
 					>
 						<View>
@@ -117,4 +124,4 @@ export default function App() {
 	);
 }
 
-registerRootComponent(App);
+// registerRootComponent(App);
